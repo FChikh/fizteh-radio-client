@@ -284,3 +284,6 @@ uploads/
 
 ### user login
 secret.py
+
+### virtual environment ###
+flask_env/

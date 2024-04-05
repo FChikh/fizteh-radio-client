@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Media Library</title>
+</head>
+<body>
+    <h2>Media Library</h2>
+    <ul>
+        {% for media in media_list %}
+            <li>{{ media.name }} by {{ media.author }}</li>
+        {% endfor %}
+    </ul>
+</body>
+</html>

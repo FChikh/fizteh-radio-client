@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Upload Media</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+</head>
+<body>
+    <h2>Upload New Media</h2>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
+        <input type="text" name="name" placeholder="Media Name" required id="name"><br>
+        <input type="text" name="author" placeholder="Author" required id="author"><br>
+        <!-- Example for adding tags. Adapt based on your actual tag structure -->
+        
+        <strong>Select Format (required):</strong><br>
+        {% for tag in tags %}
+        <input type="radio" id="format_tag_{{ tag.id }}" name="format_tag" value="{{ tag.id }}" required>
+        <label for="format_tag_{{ tag.id }}">{{ tag.name }}</label><br>
+        {% endfor %}
+        <input type="file" name="source" required id="fileInput"><br>
+        <button type="submit">Submit</button>
+    </form>
+
+    <script>
+        document.getElementById('fileInput').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+            jsmediatags.read(file, {
+                onSuccess: function(tag) {
+                console.log(tag);
+                document.getElementById('name').value = tag.tags.title || '';
+                document.getElementById('author').value = tag.tags.artist || '';
+                },
+                onError: function(error) {
+                console.log('Error reading media tags:', error);
+                }
+            });
+            }
+        });
+
+    </script>
+</body>
+</html>
