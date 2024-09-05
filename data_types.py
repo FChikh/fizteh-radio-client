@@ -324,12 +324,12 @@ class MediaArray:
 
 
 class Segment:
-    def __init__(self, id: int = None, media_id: int = None, start: int = None, begin_cut: int = None, stop_cut: int = None):
+    def __init__(self, id: int = None, mediaID: int = None, start: int = None, beginCut: int = None, stopCut: int = None):
         self._id = id
-        self._media_id = media_id
+        self._media_id = mediaID
         self._start = start
-        self._beginCut = begin_cut
-        self._stopCut = stop_cut
+        self._beginCut = beginCut
+        self._stopCut = stopCut
 
     @property
     def id(self):

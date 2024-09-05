@@ -62,7 +62,7 @@ class client:
     def __refresh_jwt_if_needed(self) -> None:
         now = time()
         if now > self.jwt.timeout:
-            self.login(self.user_info.values())
+            self.login(*(self.user_info.values()[0]))
 
     def __recover_user_info(self) -> dict:
         try:
@@ -100,9 +100,19 @@ class client:
 
     # Media Handling
 
+    def fetch_all_media(self) -> list[Media]:
+        self.__refresh_jwt_if_needed()
+        url = f'{self.base_url}/admin/library/media'
+        response = requests.get(url, headers=self.auth_header)
+        if response.status_code != 200:
+            raise ValueError(response.status_code, response.json())
+        self.library = {int(item['id']): Media.from_dict(item) for item in response.json()['library']}
+
     def search_media_in_library(self, name: str = None, author: str = None, tags: list[Tag] = None, res_len: int = 5):
         self.__refresh_jwt_if_needed()
         url = f'{self.base_url}/admin/library/media'
+        if tags is not None:
+            tags = [Tag(id=tag['id'], name=tag['name'], type=TagType(id=tag['type']['id'], name=tag['type']['name']), meta=tag['meta']) for tag in tags]
         params = {'name': name, 'author': author,
                   'tags': tags, 'res_len': res_len}
         response = requests.get(url, headers=self.auth_header, params=params)
@@ -132,11 +142,6 @@ class client:
             print(e)
             return
         metadata = extract_metadata_and_remove_artwork(source)
-        if metadata['name']:
-            media.name = metadata['name']
-        if metadata['author']:
-            media.author = metadata['author']
-
         # https://requests.readthedocs.io/en/latest/user/advanced/#post-multiple-multipart-encoded-files
         files = [('source', (os.path.basename(source), open(source, 'rb'), 'audio/mpeg')),
                  ('media', (None, json.dumps(media.to_dict()), 'application/json'))]
@@ -230,6 +235,8 @@ class client:
         params = {}
         if start is not None:
             params['start'] = start
+        else:
+            params['start'] = datetime.now().strftime('%s')
         if stop is not None:
             params['stop'] = stop
         response = requests.get(url, headers=self.auth_header, params=params)
@@ -237,14 +244,37 @@ class client:
             raise ValueError(response.status_code, response.json())
         self.schedule = response.json()['segments']
         if len(self.schedule) > 0:
-            start = datetime.strptime(
-                self.schedule[-1]['start'], r'%Y-%m-%dT%H:%M:%S.%f%z')
+            try:
+                start = datetime.strptime(
+                    self.schedule[-1]['start'], r'%Y-%m-%dT%H:%M:%S.%f%z')
+            except Exception as e:
+                print(e)
+                start = datetime.strptime(
+                    self.schedule[-1]['start'], r'%Y-%m-%dT%H:%M:%S%z')
             duration = timedelta(
                 microseconds=self.schedule[-1]['stopCut']*1e-3)
             self.time_horizon = start + duration
-        return response
+            self.fetch_all_media()
+            now = datetime.now(tz=timezone('UTC'))
+            for item in self.schedule:
+                duration = timedelta(
+                    microseconds=item['stopCut']*1e-3)
+                try:
+                    item['end'] = datetime.strftime(datetime.strptime(
+                        item['start'], r'%Y-%m-%dT%H:%M:%S.%f%z') + duration, r'%Y-%m-%dT%H:%M:%S.%f%z')
+                    # print(item['end'])
+                except Exception as e:
+                    print(e)
+                    item['end'] = datetime.strftime(datetime.strptime(
+                        item['start'], r'%Y-%m-%dT%H:%M:%S%z') + duration, r'%Y-%m-%dT%H:%M:%S.%f%z')
+            self.schedule = [item for item in self.schedule if datetime.strptime(
+                item['end'], r'%Y-%m-%dT%H:%M:%S.%f%z') > now]
+            for item in self.schedule:
+                item['mediaTitle'] = self.library[int(
+                    item['mediaID'])].author + ' - ' + self.library[int(item['mediaID'])].name
+        return self.schedule
 
-    def create_new_segment(self, media_id: int, time: datetime = None) -> int:
+    def create_new_segment(self, media_id: int, *, time: datetime = None, stop_cut: int = None) -> int:
         self.__refresh_jwt_if_needed()
         self.get_schedule()
 
@@ -260,11 +290,14 @@ class client:
         if time is not None:
             start = time
 
+        if stop_cut is None:
+            stop_cut = media.duration
+
         segment = Segment(
-            media_id=media_id,
+            mediaID=media_id,
             start=start.strftime(r"%Y-%m-%dT%H:%M:%S.%f+00:00"),
-            begin_cut=0,
-            stop_cut=media.duration
+            beginCut=0,
+            stopCut=stop_cut
         )
         url = f'{self.base_url}/admin/schedule'
         body = {'segment': segment.to_dict()}
@@ -275,10 +308,13 @@ class client:
             response = response.json()['id']
             return response
         elif response.status_code == 400:
-            if response.json()['error'] == 'segment intersection':
-                print('Segment intersection')
-            else:
-                raise ValueError(response.json())
+            try:
+                if response.json()['error'] == 'segment intersection':
+                    return -1
+                else:
+                    raise ValueError(response.json())
+            except Exception as e:
+                raise ValueError(response.text, response.request.body)
 
     def clear_schedule_from_timestamp(self, timestamp: datetime):
         self.__refresh_jwt_if_needed()
@@ -296,8 +332,11 @@ class client:
         response = requests.get(url, headers=self.auth_header)
         if response.status_code != 200:
             raise ValueError(response.status_code, response.json())
-        segment = Segment.from_dict(response.json()['segment'])
+        segment_dict = response.json()['segment']
+        segment_dict.pop('protected', None)
+        segment = Segment.from_dict(segment_dict)
         return segment
+    
 
     def delete_segment_by_id(self, segment_id: int):
         self.__refresh_jwt_if_needed()
@@ -320,6 +359,24 @@ class client:
     def stop_radio(self):
         self.__refresh_jwt_if_needed()
         url = f'{self.base_url}/radio/stop'
+        response = requests.get(url, headers=self.auth_header)
+        if response.status_code != 200:
+            raise ValueError(response.status_code, response.json())
+        return response
+    
+    # Live control
+
+    def start_live(self):
+        self.__refresh_jwt_if_needed()
+        url = f'{self.base_url}/live/start'
+        response = requests.get(url, headers=self.auth_header)
+        if response.status_code != 200:
+            raise ValueError(response.status_code, response.json())
+        return response
+    
+    def stop_live(self):
+        self.__refresh_jwt_if_needed()
+        url = f'{self.base_url}/live/stop'
         response = requests.get(url, headers=self.auth_header)
         if response.status_code != 200:
             raise ValueError(response.status_code, response.json())
