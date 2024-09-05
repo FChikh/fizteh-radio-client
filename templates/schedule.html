@@ -144,7 +144,7 @@
 
                     if (data.length > 0) {
                         // Get the end time of the last scheduled media
-                        lastEndTime = new Date(data[data.length - 1].end);
+                        lastEndTime = data[data.length - 1].end;
                     } else {
                         lastEndTime = null;
                     }
@@ -159,6 +159,7 @@
 
                         // Добавляем текущий сегмент в scheduleData
                         scheduleData.push({
+                            isGap: false,
                             id: segment.id,
                             mediaID: segment.mediaID,
                             mediaTitle: segment.mediaTitle,
@@ -193,11 +194,12 @@
 
                                 // Добавляем пропуск в scheduleData
                                 scheduleData.push({
+                                    isGap: true,
                                     id: null,
                                     mediaID: null,
                                     mediaTitle: 'Gap',
-                                    start: end.toISOString(),
-                                    end: nextStart.toISOString()
+                                    start: data[index].end,
+                                    end: data[index + 1].start
                                 });
 
                                 const gapDiv = document.createElement('div');
@@ -215,6 +217,35 @@
                 })
                 .catch(error => showAlert('danger', 'Error: Unable to fetch schedule.'));
         }
+
+        function loadAvailableGaps() {
+            gaps = [];
+            const gapSelect = document.getElementById('insert-between');
+            gapSelect.innerHTML = '<option value="">Выберите промежуток</option>'; // Reset options
+
+            // Проходим по массиву и ищем пропуски (gaps)
+            scheduleData.forEach((segment, index) => {
+                if (segment.isGap) {
+                    const gapStart = moment(segment.start);
+                    const gapEnd = moment(segment.end);
+                    const gapDuration = moment.duration(gapEnd.diff(gapStart));
+                    
+                    // Получаем минуты и секунды
+                    const minutes = Math.floor(gapDuration.asMinutes());
+                    const seconds = Math.floor(gapDuration.seconds());
+
+                    // Форматируем как mm:ss
+                    const formattedGapDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                    
+                    // Добавляем опцию в select для выбора промежутка
+                    const option = document.createElement('option');
+                    option.value = index; // Используем индекс пропуска
+                    option.textContent = `${gapStart.format('HH:mm')} - ${gapEnd.format('HH:mm')} (Доступно ${formattedGapDuration})`;
+                    gapSelect.appendChild(option);
+                }
+            });
+        }
+
 
         function moveSegment(segmentId, direction) {
             const currentIndex = scheduleData.findIndex(segment => segment.id === segmentId);
@@ -402,15 +433,18 @@
                 };
 
                 if (gapIndex !== "") {
-                    payload.start_time = scheduleData[gapIndex].end; // Start time is the end of the selected gap
+                    // Start time is the start of current gap
+                    payload.start_time = scheduleData[gapIndex].start; 
                     // Find the gap duration
-                    const currentEnd = new Date(scheduleData[gapIndex].end);
-                    const nextStart = new Date(scheduleData[parseInt(gapIndex) + 1].start);
-                    const gapDuration = (nextStart - currentEnd) * 1e6;
+                    const gapStart = new Date(scheduleData[gapIndex].start);
+                    const gapEnd = new Date(scheduleData[gapIndex].end);
 
-                    if (mediaDuration > gapDuration) {
+                    // In milliseconds
+                    const gapDuration = (gapEnd - gapStart)
+
+                    if (Math.ceil(mediaDuration / 1e6) > gapDuration) {
                         showAlert('warning', 'Media is too long to fit into the selected gap.');
-                        payload.duration = gapDuration; // Send the gap duration
+                        payload.duration = gapDuration * 1e6; // Send the gap duration
                     } else {
                         payload.duration = mediaDuration; // Send trimmed duration
                     }
@@ -511,37 +545,6 @@
 
             loadSchedule();
 
-            function loadAvailableGaps() {
-                gaps = [];
-                const gapSelect = document.getElementById('insert-between');
-                gapSelect.innerHTML = '<option value="">Выберите промежуток</option>'; // Reset options
-
-                if (scheduleData.length > 1) {
-                    for (let i = 0; i < scheduleData.length - 1; i++) {
-                        const currentEnd = moment(scheduleData[i].end);
-                        const nextStart = moment(scheduleData[i + 1].start);
-
-                        if (nextStart.isAfter(currentEnd)) {
-                            const gapDuration = moment.duration(nextStart.diff(currentEnd));
-                            
-                            // Получаем минуты, секунды и миллисекунды
-                            const minutes = Math.floor(gapDuration.asMinutes());
-                            const seconds = Math.floor(gapDuration.seconds());
-                            const milliseconds = gapDuration.milliseconds();
-
-                            // Форматируем как mm:ss.SSS
-                            const formattedGapDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                            
-                            const option = document.createElement('option');
-                            option.value = i; // Use index to identify the gap
-                            option.textContent = `${currentEnd.format('HH:mm')} - ${nextStart.format('HH:mm')} (Доступно ${formattedGapDuration})`;
-                            gapSelect.appendChild(option);
-                        }
-                    }
-                }
-            }
-
-            
         });
 
     </script>

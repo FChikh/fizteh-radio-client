@@ -270,7 +270,14 @@ def move_segment():
     else:
         return jsonify({'status': 'error', 'message': 'Segment not found'}), 404
 
-    
+@app.route('/api/start_live', methods=['POST'])
+def start_live():
+    if 'jwt' not in session:
+        return redirect(url_for('login'))
+
+    name = request.json['name']
+    response = api_client.start_live(name=name)
+    return jsonify({'status': 'success'}), 200
 
 @app.route('/logout')
 def logout():

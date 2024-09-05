@@ -417,6 +417,85 @@ class Segments:
 
     def __repr__(self):
         return str(self.to_dict())
+    
+class Live:
+    def __init__(self, id: int = None, name: str = None, start: int = None, stop: int = None, delay: int = None, offset: int = None):
+        self._id = id
+        self._name = name
+        self._start = start
+        self._stop = stop
+        self._delay = delay
+        self._offset = offset
+
+    @property
+    def id(self):
+        return self._id
+
+    @id.setter
+    def id(self, value):
+        self._id = value
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, value):
+        self._name = value
+
+    @property
+    def start(self):
+        return self._start
+
+    @start.setter
+    def start(self, value):
+        self._start = value
+
+    @property
+    def stop(self):
+        return self._stop
+
+    @stop.setter
+    def stop(self, value):
+        self._stop = value
+
+    @property
+    def delay(self):
+        return self._delay
+
+    @delay.setter
+    def delay(self, value):
+        self._delay = value
+
+    @property
+    def offset(self):
+        return self._offset
+
+    @offset.setter
+    def offset(self, value):
+        self._offset = value
+
+    def to_dict(self):
+        if self._id is None:
+            return {
+                "name": self._name,
+                "start": self._start,
+                "stop": self._stop,
+            }
+        return {
+            "id": self._id,
+            "name": self._name,
+            "start": self._start,
+            "stop": self._stop,
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(**data)
+
+    def __repr__(self):
+        return str(self.to_dict())
+    
 
 
 class AutoDJConfig:

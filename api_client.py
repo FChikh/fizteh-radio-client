@@ -7,7 +7,7 @@ import music_tag
 from pytz import timezone
 import requests
 from secret import USER_ID, LOGIN, PASSWORD
-from data_types import Tag, Media, Segment, TagType
+from data_types import Tag, Media, Segment, TagType, Live
 from datetime import datetime, timedelta
 # Constants
 
@@ -366,21 +366,30 @@ class client:
     
     # Live control
 
-    def start_live(self):
+    def start_live(self, name: str):
         self.__refresh_jwt_if_needed()
-        url = f'{self.base_url}/live/start'
-        response = requests.get(url, headers=self.auth_header)
+        live = Live(name=name, start=datetime.now(tz=timezone('UTC')).strftime(r'%Y-%m-%dT%H:%M:%S.%f%z'))
+        url = f'{self.base_url}/admin/schedule/live/start'
+        response = requests.post(url, headers=self.auth_header, json=live.to_dict())
         if response.status_code != 200:
             raise ValueError(response.status_code, response.json())
         return response
     
     def stop_live(self):
         self.__refresh_jwt_if_needed()
-        url = f'{self.base_url}/live/stop'
+        url = f'{self.base_url}/admin/schedule/live/stop'
         response = requests.get(url, headers=self.auth_header)
         if response.status_code != 200:
             raise ValueError(response.status_code, response.json())
         return response
+    
+    def get_live_status(self):
+        self.__refresh_jwt_if_needed()
+        url = f'{self.base_url}/admin/schedule/live/info'
+        response = requests.get(url, headers=self.auth_header)
+        if response.status_code != 200:
+            raise ValueError(response.status_code, response.json())
+        return response.json()
 
 
 class JWT:
