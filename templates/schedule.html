@@ -429,7 +429,7 @@
 
         // Delete a scheduled segment
         function deleteSegment(segmentId) {
-            fetch(`/delete_segment/${segmentId}`, {
+            fetch(`/api/delete_segment/${segmentId}`, {
                 method: 'DELETE'
             })
                 .then(response => {

@@ -172,24 +172,18 @@ def delete_media_from_library_by_id(media_id):
     if request.method == 'DELETE':
         try:
             g.api_client.delete_media_by_id(media_id)
-            flash('Media deleted successfully.', 'success')
             return '', 204
         except NotFoundError:
-            flash(f'Media with ID {media_id} not found.', 'warning')
             return jsonify({'error': 'Media not found'}), 404
         except AuthorizationError:
-            flash('You do not have permission to delete this media.', 'danger')
             return jsonify({'error': 'Forbidden'}), 403
         except ServerError:
-            flash('Server error occurred while deleting media.', 'danger')
             return jsonify({'error': 'Server error'}), 500
         except APIClientError as e:
-            flash('An unexpected error occurred while deleting media.', 'danger')
             logger.error(
                 f"APIClientError in delete_media_from_library_by_id: {e}")
             return jsonify({'error': 'Internal server error'}), 500
     else:
-        flash('Invalid request method.', 'danger')
         return jsonify({'error': 'Invalid method'}), 405
 
 
@@ -367,14 +361,12 @@ def raw_schedule():
         schedule_dict = [segment.to_dict() for segment in schedule]
         return jsonify(schedule_dict)
     except AuthenticationError:
-        flash('Session expired. Please log in again.', 'warning')
         return redirect(url_for('login', next=request.url))
     except NotFoundError:
         return jsonify({'error': 'Schedule not found.'}), 404
     except ServerError:
         return jsonify({'error': 'Server error occurred while fetching schedule.'}), 500
     except APIClientError as e:
-        flash('An unexpected error occurred.', 'danger')
         logger.error(f"APIClientError in raw_schedule: {e}")
         return jsonify({'error': 'Internal server error.'}), 500
 
@@ -400,13 +392,10 @@ def api_search_media():
         tags_data = [g.api_client.get_tag_by_id(
             tag_id).to_dict() for tag_id in tags]
     except ValueError:
-        flash('Invalid tag IDs provided.', 'danger')
         return jsonify({'error': 'Invalid tag IDs.'}), 400
     except NotFoundError:
-        flash('One or more tags not found.', 'warning')
         return jsonify({'error': 'Tags not found.'}), 404
     except APIClientError as e:
-        flash('Failed to retrieve tags.', 'danger')
         logger.error(
             f"APIClientError in api_search_media (tag retrieval): {e}")
         return jsonify({'error': 'Internal server error.'}), 500
@@ -417,16 +406,12 @@ def api_search_media():
         media_list_dict = [media.to_dict() for media in media_list]
         return jsonify(media_list_dict)
     except ValidationError as e:
-        flash(f'Validation Error: {e}', 'danger')
         return jsonify({'error': 'Validation error.'}), 400
     except NotFoundError:
-        flash('No media found matching the criteria.', 'warning')
         return jsonify({'error': 'No media found.'}), 404
     except ServerError:
-        flash('Server error occurred while searching media.', 'danger')
         return jsonify({'error': 'Server error.'}), 500
     except APIClientError as e:
-        flash('An unexpected error occurred while searching media.', 'danger')
         logger.error(f"APIClientError in api_search_media: {e}")
         return jsonify({'error': 'Internal server error.'}), 500
 
@@ -443,7 +428,6 @@ def api_schedule_track():
     data = request.get_json()
 
     if not data:
-        flash('No data provided.', 'warning')
         return jsonify({'error': 'No data provided.'}), 400
 
     media_id = data.get('media_id')
@@ -451,7 +435,6 @@ def api_schedule_track():
     duration = data.get('duration')
 
     if not media_id or not start_time_str:
-        flash('Media ID and start time are required.', 'warning')
         return jsonify({'error': 'Media ID and start time are required.'}), 400
 
     try:
@@ -462,7 +445,6 @@ def api_schedule_track():
             start_time = datetime.strptime(
                 start_time_str, '%Y-%m-%dT%H:%M:%S.%f%z')
     except ValueError:
-        flash('Invalid start time format.', 'danger')
         return jsonify({'error': 'Invalid start time format.'}), 400
 
     try:
@@ -471,24 +453,19 @@ def api_schedule_track():
         if result == -1:
             flash('Failed to schedule track due to segment intersection.', 'danger')
             return jsonify({'error': 'Segment intersection detected.'}), 400
-        flash('Track scheduled successfully.', 'success')
         return jsonify({'id': result}), 201
     except ValidationError as e:
-        flash(f'Validation Error: {e}', 'danger')
         return jsonify({'error': 'Validation error.'}), 400
     except NotFoundError:
-        flash('Media not found.', 'warning')
         return jsonify({'error': 'Media not found.'}), 404
     except ServerError:
-        flash('Server error occurred while scheduling track.', 'danger')
         return jsonify({'error': 'Server error.'}), 500
     except APIClientError as e:
-        flash('An unexpected error occurred while scheduling track.', 'danger')
         logger.error(f"APIClientError in api_schedule_track: {e}")
         return jsonify({'error': 'Internal server error.'}), 500
 
 
-@app.route('/delete_segment/<int:segment_id>', methods=['POST', 'DELETE'])
+@app.route('/api/delete_segment/<int:segment_id>', methods=['POST', 'DELETE'])
 def delete_segment(segment_id):
     """
     Delete a segment by its ID.
@@ -500,19 +477,14 @@ def delete_segment(segment_id):
     if request.method == 'DELETE':
         try:
             g.api_client.delete_segment_by_id(segment_id)
-            flash('Segment deleted successfully.', 'success')
             return '', 204
         except NotFoundError:
-            flash(f'Segment with ID {segment_id} not found.', 'warning')
             return jsonify({'error': 'Segment not found.'}), 404
         except AuthorizationError:
-            flash('You do not have permission to delete this segment.', 'danger')
             return jsonify({'error': 'Forbidden.'}), 403
         except ServerError:
-            flash('Server error occurred while deleting segment.', 'danger')
             return jsonify({'error': 'Server error.'}), 500
         except APIClientError as e:
-            flash('An unexpected error occurred while deleting segment.', 'danger')
             logger.error(f"APIClientError in delete_segment: {e}")
             return jsonify({'error': 'Internal server error.'}), 500
     else:
@@ -532,7 +504,6 @@ def move_segment():
     data = request.get_json()
 
     if not data:
-        flash('No data provided.', 'warning')
         return jsonify({'error': 'No data provided.'}), 400
 
     current_segment_id = data.get('currentSegmentId')
@@ -542,7 +513,6 @@ def move_segment():
     top_end_time = data.get('topEndTime')
 
     if not direction:
-        flash('Direction is required.', 'warning')
         return jsonify({'error': 'Direction is required.'}), 400
 
     try:
@@ -552,10 +522,8 @@ def move_segment():
         adjacent_segment = g.api_client.get_segment_by_id(
             adjacent_segment_id) if adjacent_segment_id else None
     except NotFoundError:
-        flash('One or more segments not found.', 'warning')
         return jsonify({'error': 'Segments not found.'}), 404
     except APIClientError as e:
-        flash('Failed to retrieve segments.', 'danger')
         logger.error(
             f"APIClientError in move_segment (segment retrieval): {e}")
         return jsonify({'error': 'Internal server error.'}), 500
@@ -565,7 +533,7 @@ def move_segment():
             if not adjacent_segment:
                 if direction == 'down':
                     current_segment_new_start = datetime.strptime(
-                        top_end_time, '%Y-%m-%dT%H:%M:%S.%f%z') - timedelta(milliseconds=current_segment.stop_cut)
+                        top_end_time, '%Y-%m-%dT%H:%M:%S.%f%z') - timedelta(microseconds=current_segment.stop_cut // 1e3)
                     g.api_client.delete_segment_by_id(current_segment_id)
                     g.api_client.create_new_segment(
                         media_id=current_segment.media_id,
@@ -582,12 +550,11 @@ def move_segment():
                         stop_cut=current_segment.stop_cut
                     )
                 else:
-                    flash('Invalid direction provided.', 'danger')
                     return jsonify({'status': 'error', 'message': 'Direction is invalid'}), 400
             else:
                 if direction == 'down':
                     current_segment_new_start = datetime.strptime(
-                        current_segment.start, '%Y-%m-%dT%H:%M:%S.%f%z') + timedelta(milliseconds=adjacent_segment.stop_cut)
+                        current_segment.start, '%Y-%m-%dT%H:%M:%S.%f%z') + timedelta(microseconds=adjacent_segment.stop_cut // 1e3)
 
                     # Delete both segments
                     g.api_client.delete_segment_by_id(current_segment_id)
@@ -607,7 +574,7 @@ def move_segment():
                     )
                 elif direction == 'up':
                     adjacent_segment_new_start = datetime.strptime(
-                        adjacent_segment.start, '%Y-%m-%dT%H:%M:%S.%f%z') + timedelta(milliseconds=current_segment.stop_cut)
+                        adjacent_segment.start, '%Y-%m-%dT%H:%M:%S.%f%z') + timedelta(microseconds=current_segment.stop_cut // 1e3)
 
                     # Delete both segments
                     g.api_client.delete_segment_by_id(current_segment_id)
@@ -626,21 +593,15 @@ def move_segment():
                         stop_cut=adjacent_segment.stop_cut
                     )
                 else:
-                    flash('Invalid direction provided.', 'danger')
                     return jsonify({'status': 'error', 'message': 'Direction is invalid'}), 400
-            flash('Segment moved successfully.', 'success')
             return jsonify({'status': 'success'}), 200
         else:
-            flash('Segment not found.', 'warning')
             return jsonify({'status': 'error', 'message': 'Segment not found'}), 404
     except ValidationError as e:
-        flash(f'Validation Error: {e}', 'danger')
         return jsonify({'status': 'error', 'message': 'Validation error'}), 400
     except ServerError:
-        flash('Server error occurred while moving segment.', 'danger')
         return jsonify({'status': 'error', 'message': 'Server error'}), 500
     except APIClientError as e:
-        flash('An unexpected error occurred while moving segment.', 'danger')
         logger.error(f"APIClientError in move_segment: {e}")
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
