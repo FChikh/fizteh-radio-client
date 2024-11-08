@@ -324,12 +324,15 @@ class MediaArray:
 
 
 class Segment:
-    def __init__(self, id: int = None, mediaID: int = None, start: int = None, beginCut: int = None, stopCut: int = None):
+    def __init__(self, id: int = None, mediaID: int = None, start: int = None, beginCut: int = None, stopCut: int = None, protected: bool = None, end: int = None, mediaTitle: str = None):
         self._id = id
         self._media_id = mediaID
         self._start = start
         self._beginCut = beginCut
         self._stopCut = stopCut
+        self._protected = protected
+        self._end = end
+        self._mediaTitle = mediaTitle
 
     @property
     def id(self):
@@ -371,20 +374,44 @@ class Segment:
     def stopCut(self, value):
         self._stopCut = value
 
+    @property
+    def protected(self):
+        return self._protected
+    
+    @property
+    def end(self):
+        return self._end
+    
+    @end.setter
+    def end(self, value):
+        self._end = value
+    
+    @property
+    def mediaTitle(self):
+        return self._mediaTitle
+    
+    @mediaTitle.setter
+    def mediaTitle(self, value):
+        self._mediaTitle = value
+
     def to_dict(self):
         if self._id is None:
             return {
                 "mediaID": self._media_id,
                 "start": self._start,
                 "beginCut": self._beginCut,
-                "stopCut": self._stopCut
+                "stopCut": self._stopCut,
+                "end": self._end,
+                "mediaTitle": self._mediaTitle
             }
         return {
             "id": self._id,
             "mediaID": self._media_id,
             "start": self._start,
             "beginCut": self._beginCut,
-            "stopCut": self._stopCut
+            "stopCut": self._stopCut,
+            "end": self._end,
+            "mediaTitle": self._mediaTitle
         }
 
     @classmethod
