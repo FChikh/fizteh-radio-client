@@ -6,8 +6,7 @@ from werkzeug.utils import secure_filename
 # Assume your API client code is saved in a module
 from api_client import client
 
-
-
+# Create a Flask app
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'  # Necessary for session management
 
@@ -155,8 +154,12 @@ def api_search_media():
         return redirect(url_for('login'))
     name = request.args.get('name', None)
     author = request.args.get('author', None)
+    if request.args.get('tags') is None or request.args.get('tags') == '':
+        tags = []
+    else:
+        tags = request.args.getlist('tags')
     # Assuming tags are passed as query parameters
-    tags = list(map(int, request.args.getlist('format_tag')))
+    tags = list(map(int, tags))
     tags = [api_client.get_tag_by_id(tag_id).to_dict()
             for tag_id in tags]
     print(tags)
@@ -269,6 +272,23 @@ def move_segment():
             return jsonify({'status': 'success'}), 200
     else:
         return jsonify({'status': 'error', 'message': 'Segment not found'}), 404
+    
+@app.route('/live', methods=['GET'])
+def live():
+    if 'jwt' not in session:
+        return redirect(url_for('login'))
+
+    # lives = api_client.get_lives()
+    lives = []
+    return render_template('live.html', lives=lives)
+
+@app.route('/api/get_live_status', methods=['GET'])
+def get_live_status():
+    if 'jwt' not in session:
+        return redirect(url_for('login'))
+
+    live_status = api_client.get_live_status()
+    return jsonify({'status': live_status})
 
 @app.route('/api/start_live', methods=['POST'])
 def start_live():
@@ -278,6 +298,30 @@ def start_live():
     name = request.json['name']
     response = api_client.start_live(name=name)
     return jsonify({'status': 'success'}), 200
+
+@app.route('/api/stop_live', methods=['POST'])
+def stop_live():
+    if 'jwt' not in session:
+        return redirect(url_for('login'))
+
+    response = api_client.stop_live()
+    return jsonify({'status': 'success'}), 200
+
+@app.route('/api/get_tag_types', methods=['GET'])
+def get_tag_types():
+    if 'jwt' not in session:
+        return redirect(url_for('login'))
+
+    tag_types = api_client.get_available_tag_types()
+    return jsonify([tag_type.to_dict() for tag_type in tag_types])
+
+@app.route('/api/get_tags', methods=['GET'])
+def get_tags():
+    if 'jwt' not in session:
+        return redirect(url_for('login'))
+
+    tags = api_client.get_all_registered_tags()
+    return jsonify([tag.to_dict() for tag in tags])
 
 @app.route('/logout')
 def logout():

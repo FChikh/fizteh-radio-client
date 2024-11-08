@@ -21,7 +21,7 @@
     }
 
     .navbar-nav {
-        margin-left: auto; /* Сдвигает элементы вправо */
+        margin-left: auto;
     }
 
 </style>
@@ -45,6 +45,9 @@
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('upload') }}">Загрузить медиа</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('live') }}">Эфир</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('logout') }}">Выйти</a>

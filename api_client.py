@@ -6,7 +6,6 @@ import jwt
 import music_tag
 from pytz import timezone
 import requests
-from secret import USER_ID, LOGIN, PASSWORD
 from data_types import Tag, Media, Segment, TagType, Live
 from datetime import datetime, timedelta
 # Constants
@@ -47,6 +46,8 @@ class client:
 
     def __init__(self) -> None:
         self.cache_dir = '.cache'
+        if not os.path.exists(self.cache_dir):
+            os.makedirs(self.cache_dir)
         self.jwt = None
         self.auth_header = None
         self.user_info = self.__recover_user_info()
@@ -62,7 +63,7 @@ class client:
     def __refresh_jwt_if_needed(self) -> None:
         now = time()
         if now > self.jwt.timeout:
-            self.login(*(self.user_info.values()[0]))
+            self.login(self.user_info['login'], self.user_info['pass'])
 
     def __recover_user_info(self) -> dict:
         try:
@@ -111,8 +112,8 @@ class client:
     def search_media_in_library(self, name: str = None, author: str = None, tags: list[Tag] = None, res_len: int = 5):
         self.__refresh_jwt_if_needed()
         url = f'{self.base_url}/admin/library/media'
-        if tags is not None:
-            tags = [Tag(id=tag['id'], name=tag['name'], type=TagType(id=tag['type']['id'], name=tag['type']['name']), meta=tag['meta']) for tag in tags]
+        # if tags is not None:
+        #     tags = [Tag(id=tag['id'], name=tag['name'], type=TagType(id=tag['type']['id'], name=tag['type']['name']), meta=tag['meta']) for tag in tags]
         params = {'name': name, 'author': author,
                   'tags': tags, 'res_len': res_len}
         response = requests.get(url, headers=self.auth_header, params=params)
@@ -368,10 +369,11 @@ class client:
 
     def start_live(self, name: str):
         self.__refresh_jwt_if_needed()
-        live = Live(name=name, start=datetime.now(tz=timezone('UTC')).strftime(r'%Y-%m-%dT%H:%M:%S.%f%z'))
+        live = Live(name=name)
         url = f'{self.base_url}/admin/schedule/live/start'
-        response = requests.post(url, headers=self.auth_header, json=live.to_dict())
+        response = requests.post(url, headers=self.auth_header, json={'live': live.to_dict()})
         if response.status_code != 200:
+            print(response.status_code, response.text)
             raise ValueError(response.status_code, response.json())
         return response
     
@@ -386,6 +388,14 @@ class client:
     def get_live_status(self):
         self.__refresh_jwt_if_needed()
         url = f'{self.base_url}/admin/schedule/live/info'
+        response = requests.get(url, headers=self.auth_header)
+        if response.status_code != 200:
+            raise ValueError(response.status_code, response.json())
+        return response.json()
+    
+    def get_lives(self):
+        self.__refresh_jwt_if_needed()
+        url = f'{self.base_url}/admin/schedule/lives'
         response = requests.get(url, headers=self.auth_header)
         if response.status_code != 200:
             raise ValueError(response.status_code, response.json())

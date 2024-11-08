@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Прямой эфир</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+        crossorigin="anonymous"></script>
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+
+        .container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .form-label {
+            font-weight: bold;
+        }
+
+        .form-control,
+        .form-select {
+            border-radius: 5px;
+        }
+
+        .btn-primary {
+            background-color: #007bff;
+            border-color: #007bff;
+        }
+
+        .btn-primary:hover {
+            background-color: #0056b3;
+            border-color: #004085;
+        }
+
+        .btn-stop {
+            background-color: #dc3545;
+            border-color: #dc3545;
+        }
+
+        .btn-stop:hover {
+            background-color: #c82333;
+            border-color: #bd2130;
+        }
+
+        .alert {
+            margin-top: 20px;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            /* Полупрозрачный фон */
+            display: none;
+            /* По умолчанию не отображается */
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            /* Сверху всех элементов */
+        }
+
+        .loading-spinner {
+            border: 8px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top: 8px solid #fff;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Navbar -->
+    {% include 'includes/navbar.html' %}
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <div class="container mt-4">
+        <h2>Прямой эфир</h2>
+
+        <!-- Alert messages -->
+        <div id="alertContainer"></div>
+
+        <!-- Live Status -->
+        <div id="liveStatus" class="mb-4">
+            <!-- Состояние эфира будет отображаться здесь -->
+        </div>
+
+        <div id="liveHistory" class="mb-4">
+            {% if lives %}
+            <h3>История эфиров</h3>
+            <ul class="list-group">
+                {% for live in lives %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    {{ live.name }}
+                    <span>{{ live.start }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+
+        <!-- Live Form -->
+        <form id="liveForm" class="needs-validation" novalidate>
+            <div class="mb-3">
+                <label for="liveName" class="form-label">Название эфира</label>
+                <input type="text" class="form-control" id="liveName" placeholder="Введите название эфира" required>
+                <div class="invalid-feedback">
+                    Пожалуйста, введите название эфира.
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Запустить</button>
+        </form>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const liveStatusContainer = document.getElementById('liveStatus');
+            const liveForm = document.getElementById('liveForm');
+            const alertContainer = document.getElementById('alertContainer');
+            const loadingOverlay = document.getElementById('loading-overlay');
+
+            // Показываем оверлей загрузки
+            function showLoading() {
+                loadingOverlay.style.display = 'flex';
+                document.body.style.overflow = 'hidden'; // Отключаем прокрутку
+            }
+
+            // Скрываем оверлей загрузки
+            function hideLoading() {
+                loadingOverlay.style.display = 'none';
+                document.body.style.overflow = 'auto'; // Включаем прокрутку
+            }
+
+            // Показать оповещение
+            function showAlert(type, message) {
+                alertContainer.innerHTML = `
+                    <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                        ${message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                `;
+            }
+
+            // Проверка статуса эфира при загрузке страницы
+            function checkLiveStatus() {
+                showLoading();
+                fetch('/api/get_live_status')
+                    .then(response => {
+                        if (response.redirected) {
+                            window.location.href = response.url;
+                            return;
+                        }
+                        if (response.status === 401) {
+                            showAlert('warning', 'Сессия истекла. Пожалуйста, войдите снова.');
+                            window.location.href = '/login';
+                            return;
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log(data);
+                        if (data.status.live.id !== 0) {
+                            displayLiveStatus(data.status.live.name);
+                        } else {
+                            displayLiveForm();
+                        }
+                    })
+                    .catch(error => {
+                        showAlert('danger', 'Ошибка: Не удалось проверить статус эфира.');
+                    })
+                    .finally(() => {
+                        hideLoading();
+                    });
+            }
+
+            // Отображение статуса эфира
+            function displayLiveStatus(name) {
+                liveStatusContainer.innerHTML = `
+                    <div class="alert alert-success d-flex justify-content-between align-items-center" role="alert">
+                        <span>Эфир "${name}" в процессе.</span>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="stopLive()">Завершить эфир</button>
+                    </div>
+                `;
+                document.getElementById('liveForm').style.display = 'none';
+            }
+
+            // Отображение формы для запуска эфира
+            function displayLiveForm() {
+                liveStatusContainer.innerHTML = '';
+                document.getElementById('liveForm').style.display = 'block';
+            }
+
+            // Обработка отправки формы для запуска эфира
+            liveForm.addEventListener('submit', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+
+                if (!liveForm.checkValidity()) {
+                    liveForm.classList.add('was-validated');
+                    return;
+                }
+
+                const liveName = document.getElementById('liveName').value.trim();
+                if (liveName === '') {
+                    showAlert('warning', 'Название эфира не может быть пустым.');
+                    return;
+                }
+
+                startLive(liveName);
+            });
+
+            // Отправка запроса на запуск эфира
+            function startLive(name) {
+                showLoading();
+                fetch('/api/start_live', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name: name })
+                })
+                    .then(response => {
+                        if (response.redirected) {
+                            window.location.href = response.url;
+                            return;
+                        }
+                        if (response.status === 401) {
+                            showAlert('warning', 'Сессия истекла. Пожалуйста, войдите снова.');
+                            window.location.href = '/login';
+                            return;
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.status === 'success') {
+                            displayLiveStatus(name);
+                            showAlert('success', 'Эфир успешно запущен.');
+                        } else {
+                            showAlert('danger', data.message || 'Ошибка: Не удалось запустить эфир.');
+                        }
+                    })
+                    .catch(error => {
+                        showAlert('danger', 'Ошибка: Не удалось запустить эфир.');
+                    })
+                    .finally(() => {
+                        hideLoading();
+                    });
+            }
+
+            // Отправка запроса на завершение эфира
+            window.stopLive = () => {
+                if (!confirm('Вы уверены, что хотите завершить эфир?')) {
+                    return;
+                }
+
+                showLoading();
+                fetch('/api/stop_live', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                    .then(response => {
+                        if (response.redirected) {
+                            window.location.href = response.url;
+                            return;
+                        }
+                        if (response.status === 401) {
+                            showAlert('warning', 'Сессия истекла. Пожалуйста, войдите снова.');
+                            window.location.href = '/login';
+                            return;
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.status === 'success') {
+                            displayLiveForm();
+                            showAlert('success', 'Эфир успешно завершен.');
+                        } else {
+                            showAlert('danger', data.message || 'Ошибка: Не удалось завершить эфир.');
+                        }
+                    })
+                    .catch(error => {
+                        showAlert('danger', 'Ошибка: Не удалось завершить эфир.');
+                    })
+                    .finally(() => {
+                        hideLoading();
+                    });
+            }
+
+            // Инициализация страницы
+            checkLiveStatus();
+        });
+    </script>
+</body>
+
+</html>

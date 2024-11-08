@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>Current Schedule</title>
@@ -17,63 +18,106 @@
         body {
             background-color: #f8f9fa;
         }
+
         .container {
             background-color: #ffffff;
             border-radius: 8px;
             padding: 20px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
+
         h2 {
             margin-bottom: 20px;
         }
+
         .form-label {
             font-weight: bold;
         }
+
         .form-control,
         .form-select {
             border-radius: 5px;
         }
+
         .btn-primary {
             background-color: #007bff;
             border-color: #007bff;
         }
+
         .btn-primary:hover {
             background-color: #0056b3;
             border-color: #004085;
         }
+
         .btn-danger {
             background-color: #dc3545;
             border-color: #dc3545;
         }
+
         .btn-danger:hover {
             background-color: #c82333;
             border-color: #bd2130;
         }
+
         .list-group-item {
             border: 1px solid #dee2e6;
             border-radius: 8px;
             margin-bottom: 10px;
             padding: 10px;
         }
+
         .alert {
             margin-top: 20px;
         }
+
         .input-group-append .input-group-text {
             background-color: #e9ecef;
             border-color: #ced4da;
         }
+
         .gap-item {
-            background-color: #e3f2fd; /* Light blue for gaps */
+            background-color: #e3f2fd;
+            /* Light blue for gaps */
             border-color: #90caf9;
-            color: #0d47a1; /* Dark blue text for contrast */
+            color: #0d47a1;
+            /* Dark blue text for contrast */
         }
 
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5); /* Полупрозрачный фон */
+            display: none; /* По умолчанию не отображается */
+            justify-content: center;
+            align-items: center;
+            z-index: 9999; /* Сверху всех элементов */
+        }
+        .loading-spinner {
+            border: 8px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top: 8px solid #fff;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
+
 <body>
     <!-- Navbar -->
 
     {% include 'includes/navbar.html' %}
+
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+    </div>
 
 
     <div class="container mt-4">
@@ -119,45 +163,70 @@
         let lastEndTime = null;
         let scheduleData = [];
         let gaps = [];
-        // Initial load of schedule
-        function loadSchedule() {
+
+        // Helper function to show loading overlay
+        function showLoading() {
+            document.getElementById('loading-overlay').style.display = 'flex';
+            document.body.style.overflow = 'hidden'; // Отключаем прокрутку
+        }
+
+        // Helper function to hide loading overlay
+        function hideLoading() {
+            document.getElementById('loading-overlay').style.display = 'none';
+            document.body.style.overflow = 'auto'; // Включаем прокрутку
+        }
+
+        // Helper function to format duration as mm:ss
+        function formatDuration(durationInSeconds) {
+            const minutes = Math.floor(durationInSeconds / 60);
+            const seconds = Math.floor(durationInSeconds % 60);
+            return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        // Helper function to handle fetch errors and redirects
+        function handleFetchResponse(response) {
+            if (response.redirected) {
+                window.location.href = response.url;
+                return Promise.reject('Redirected');
+            }
+            if (response.status === 401) {
+                showAlert('warning', 'Session expired. Please log in again.');
+                window.location.href = '/login';
+                return Promise.reject('Unauthorized');
+            }
+            return response.json();
+        }
+
+        // Show alert function
+        function showAlert(type, message) {
+            const alertContainer = document.getElementById('alertContainer');
+            alertContainer.innerHTML = `
+            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        `;
+        }
+
+        // Load schedule data from the server
+        async function loadSchedule() {
+            showLoading();
             fetch('/api/schedule')
-                .then(response => {
-                    if (response.redirected) {
-                        window.location.href = response.url;
-                        return;
-                    }
-
-                    if (response.status === 401) {
-                        showAlert('warning', 'Session expired. Please log in again.');
-                        window.location.href = '/login';
-                        return;
-                    }
-
-                    return response.json();
-                })
+                .then(handleFetchResponse)
                 .then(data => {
                     const scheduleContainer = document.getElementById('schedule-container');
                     scheduleContainer.innerHTML = ''; // Clear existing schedule
 
-                    scheduleData = []; // Очищаем массив для нового расписания
-
-                    if (data.length > 0) {
-                        // Get the end time of the last scheduled media
-                        lastEndTime = data[data.length - 1].end;
-                    } else {
-                        lastEndTime = null;
-                    }
+                    scheduleData = [];
+                    lastEndTime = data.length > 0 ? data[data.length - 1].end : null;
 
                     data.forEach((segment, index) => {
                         const start = new Date(segment.start);
                         const end = new Date(segment.end);
-                        const duration = Math.floor((end - start) / 1e3);
-                        const minutes = duration / 60 >> 0;
-                        const seconds = duration % 60;
-                        const formattedDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                        const durationInSeconds = Math.floor((end - start) / 1000);
+                        const formattedDuration = formatDuration(durationInSeconds);
 
-                        // Добавляем текущий сегмент в scheduleData
+                        // Add current segment to scheduleData
                         scheduleData.push({
                             isGap: false,
                             id: segment.id,
@@ -167,120 +236,98 @@
                             end: segment.end
                         });
 
+                        // Create and append segment div
                         const segmentDiv = document.createElement('div');
                         segmentDiv.className = 'list-group-item d-flex justify-content-between align-items-center';
                         segmentDiv.innerHTML = `
-                            <div>
-                                <p><strong>Media:</strong> ${segment.mediaTitle} (ID: ${segment.mediaID})</p>
-                                <p><strong>Start:</strong> ${segment.start} - <strong>End:</strong> ${segment.end}</p>
-                                <p><strong>Duration:</strong> ${formattedDuration}</p>
-                            </div>
-                            <div>
-                                ${index > 0 ? `<button class="btn btn-secondary btn-sm" onclick="moveSegment(${segment.id}, 'up')"><i class="fas fa-arrow-up"></i> Вверх</button>` : ''}
-                                ${index < data.length - 1 ? `<button class="btn btn-secondary btn-sm" onclick="moveSegment(${segment.id}, 'down')"><i class="fas fa-arrow-down"></i> Вниз</button>` : ''}
-                                <button class="btn btn-danger btn-sm" onclick="deleteSegment(${segment.id})"><i class="fas fa-trash"></i> Удалить</button>
-                            </div>
-                        `;
+                        <div>
+                            <p><strong>Media:</strong> ${segment.mediaTitle} (ID: ${segment.mediaID})</p>
+                            <p><strong>Start:</strong> ${segment.start} - <strong>End:</strong> ${segment.end}</p>
+                            <p><strong>Duration:</strong> ${formattedDuration}</p>
+                        </div>
+                        <div>
+                            ${index > 0 ? `<button class="btn btn-secondary btn-sm" onclick="moveSegment(${segment.id}, 'up')"><i class="fas fa-arrow-up"></i> Вверх</button>` : ''}
+                            ${index < data.length - 1 ? `<button class="btn btn-secondary btn-sm" onclick="moveSegment(${segment.id}, 'down')"><i class="fas fa-arrow-down"></i> Вниз</button>` : ''}
+                            <button class="btn btn-danger btn-sm" onclick="deleteSegment(${segment.id})"><i class="fas fa-trash"></i> Удалить</button>
+                        </div>
+                    `;
                         scheduleContainer.appendChild(segmentDiv);
 
                         // Check for and add gaps between segments
                         if (index < data.length - 1) {
                             const nextStart = new Date(data[index + 1].start);
                             if (nextStart > end) {
-                                const gapDuration = Math.floor((nextStart - end) / 1e3);
-                                const gapMinutes = gapDuration / 60 >> 0;
-                                const gapSeconds = gapDuration % 60;
-                                const formattedGapDuration = `${gapMinutes}:${gapSeconds.toString().padStart(2, '0')}`;
+                                const gapDurationInSeconds = Math.floor((nextStart - end) / 1000);
+                                const formattedGapDuration = formatDuration(gapDurationInSeconds);
 
-                                // Добавляем пропуск в scheduleData
+                                // Add gap to scheduleData
                                 scheduleData.push({
                                     isGap: true,
                                     id: null,
                                     mediaID: null,
                                     mediaTitle: 'Gap',
-                                    start: data[index].end,
+                                    start: segment.end,
                                     end: data[index + 1].start
                                 });
 
                                 const gapDiv = document.createElement('div');
                                 gapDiv.className = 'list-group-item gap-item d-flex justify-content-between align-items-center';
                                 gapDiv.innerHTML = `
-                                    <div>
-                                        <p><strong>Gap:</strong> ${end.toISOString().slice(0, 19)} - ${nextStart.toISOString().slice(0, 19)}</p>
-                                        <p><strong>Duration:</strong> ${formattedGapDuration}</p>
-                                    </div>
-                                `;
+                                <div>
+                                    <p><strong>Gap:</strong> ${end.toISOString().slice(0, 19)} - ${nextStart.toISOString().slice(0, 19)}</p>
+                                    <p><strong>Duration:</strong> ${formattedGapDuration}</p>
+                                </div>
+                            `;
                                 scheduleContainer.appendChild(gapDiv);
                             }
                         }
                     });
+                    hideLoading();
                 })
-                .catch(error => showAlert('danger', 'Error: Unable to fetch schedule.'));
+                .catch(error => {
+                    showAlert('danger', 'Error: Unable to fetch schedule.');
+                    hideLoading();
+                });
         }
 
+        // Load available gaps into the dropdown
         function loadAvailableGaps() {
             gaps = [];
             const gapSelect = document.getElementById('insert-between');
             gapSelect.innerHTML = '<option value="">Выберите промежуток</option>'; // Reset options
 
-            // Проходим по массиву и ищем пропуски (gaps)
             scheduleData.forEach((segment, index) => {
                 if (segment.isGap) {
                     const gapStart = moment(segment.start);
                     const gapEnd = moment(segment.end);
                     const gapDuration = moment.duration(gapEnd.diff(gapStart));
-                    
-                    // Получаем минуты и секунды
-                    const minutes = Math.floor(gapDuration.asMinutes());
-                    const seconds = Math.floor(gapDuration.seconds());
+                    const formattedGapDuration = formatDuration(gapDuration.asSeconds());
 
-                    // Форматируем как mm:ss
-                    const formattedGapDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                    
-                    // Добавляем опцию в select для выбора промежутка
+                    // Add option to the select element
                     const option = document.createElement('option');
-                    option.value = index; // Используем индекс пропуска
+                    option.value = index; // Use index to identify the gap
                     option.textContent = `${gapStart.format('HH:mm')} - ${gapEnd.format('HH:mm')} (Доступно ${formattedGapDuration})`;
                     gapSelect.appendChild(option);
                 }
             });
         }
 
-
+        // Move a segment up or down
         function moveSegment(segmentId, direction) {
+            showLoading();
+
             const currentIndex = scheduleData.findIndex(segment => segment.id === segmentId);
-            let targetIndex, topStartTime, topEndTime;
+            if (currentIndex === -1) return; // Segment not found
 
-            // Определяем целевой индекс в зависимости от направления
-            if (direction === 'up') {
-                targetIndex = currentIndex - 1;
-                if (targetIndex > 0) {
-                    topStartTime = scheduleData[targetIndex-1].end;
-                } else {
-                    topStartTime = scheduleData[targetIndex].start;
-                }
-            } else if (direction === 'down') {
-                targetIndex = currentIndex + 1;
-                if (targetIndex < scheduleData.length - 1) {
-                    topEndTime = scheduleData[targetIndex+1].start;
-                } else {
-                    topEndTime = scheduleData[targetIndex].end;
-                }
-            }
+            const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+            if (targetIndex < 0 || targetIndex >= scheduleData.length) return; // Index out of bounds
 
-            // Проверяем, что целевой индекс не выходит за пределы массива
-            if (targetIndex < 0 || targetIndex >= scheduleData.length) {
-                return; // Невозможно переместить за пределы списка
-            }
-
+            const topStartTime = direction === 'up' ? scheduleData[targetIndex].start : scheduleData[targetIndex].end;
             const adjacentSegmentId = scheduleData[targetIndex].id;
 
-            // Делаем запрос на сервер для перемещения сегмента
             fetch(`/api/move_segment`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     currentSegmentId: segmentId,
                     adjacentSegmentId: adjacentSegmentId,
@@ -288,34 +335,116 @@
                     topStartTime: topStartTime
                 })
             })
-            .then(response => {
-                if (response.redirected) {
-                    window.location.href = response.url; // Перенаправляем на URL логина
-                } else if (response.status === 401) {
-                    showAlert('warning', 'Session expired. Please log in again.');
-                    window.location.href = '/login'; // Перенаправляем на страницу логина
-                } else if (response.ok) {
-                    loadSchedule(); // Перезагружаем расписание после перемещения
+                .then(handleFetchResponse)
+                .then(() => {
+                    hideLoading();
+                    loadSchedule();
+                })
+                .catch(() => {
+                    showAlert('danger', 'Error: Unable to move segment.'); 
+                    hideLoading();
+                });
+        }
+
+        // Schedule media to a specific start time or gap
+        function scheduleMedia(mediaId, mediaDuration) {
+            showLoading();
+            const startTime = document.getElementById('schedule-time').value;
+            const gapIndex = document.getElementById('insert-between').value;
+
+            if (!startTime && gapIndex === "") {
+                showAlert('warning', 'Please select a start time or a gap');
+                return;
+            }
+
+            const payload = { media_id: mediaId };
+
+            if (gapIndex !== "") {
+                payload.start_time = scheduleData[gapIndex].start;
+                const gapStart = new Date(scheduleData[gapIndex].start);
+                const gapEnd = new Date(scheduleData[gapIndex].end);
+                const gapDurationInMilliseconds = gapEnd - gapStart;
+
+                if (Math.ceil(mediaDuration / 1e6) > gapDurationInMilliseconds) {
+                    showAlert('warning', 'Media is too long to fit into the selected gap.');
+                    payload.duration = gapDurationInMilliseconds * 1e6; // Send the gap duration
                 } else {
-                    showAlert('danger', 'Error: Unable to move segment.');
+                    payload.duration = mediaDuration; // Send trimmed duration
                 }
+            } else {
+                payload.start_time = startTime;
+            }
+
+            fetch('/api/schedule_track', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
             })
-            .catch(error => showAlert('danger', 'Error: Unable to move segment.'));
+                .then(handleFetchResponse)
+                .then(() => {
+                    loadSchedule();
+                    showAlert('success', 'Media scheduled successfully.');
+                    const scheduleModal = document.getElementById('scheduleModal');
+                    if (scheduleModal) {
+                        const modalInstance = bootstrap.Modal.getInstance(scheduleModal);
+                        modalInstance.hide(); // Hide the modal
+                    }
+                    hideLoading();
+                })
+                .catch(() => {
+                    showAlert('danger', 'Error: Unable to schedule media.'); 
+                    hideLoading();
+                });
         }
 
-                    // Show alert function
-        function showAlert(type, message) {
-            const alertContainer = document.getElementById('alertContainer');
-            alertContainer.innerHTML = `
-                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
-                    ${message}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-            `;
+        // Schedule media to the end of the schedule
+        function scheduleToEnd(mediaId) {
+            if (!lastEndTime) {
+                showAlert('warning', 'No media in the schedule to determine end time.');
+                return;
+            }
+
+            const payload = {
+                media_id: mediaId,
+                start_time: lastEndTime
+            };
+
+            fetch('/api/schedule_track', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+                .then(handleFetchResponse)
+                .then(() => {
+                    loadSchedule();
+                    showAlert('success', 'Media scheduled at the end successfully.');
+                    const scheduleModal = document.getElementById('scheduleModal');
+                    if (scheduleModal) {
+                        const modalInstance = bootstrap.Modal.getInstance(scheduleModal);
+                        modalInstance.hide(); // Hide the modal
+                    }
+                })
+                .catch(() => showAlert('danger', 'Error: Unable to schedule media.'));
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
+        // Delete a scheduled segment
+        function deleteSegment(segmentId) {
+            fetch(`/delete_segment/${segmentId}`, {
+                method: 'DELETE'
+            })
+                .then(response => {
+                    if (response.ok) {
+                        loadSchedule();
+                        showAlert('success', 'Segment deleted successfully.');
+                    } else {
+                        showAlert('danger', 'Error: Unable to delete segment.');
+                    }
+                })
+                .catch(() => showAlert('danger', 'Error: Unable to delete segment.'));
+        }
 
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadSchedule();
             // Function to search media
             window.searchMedia = () => {
                 const name = document.getElementById('name').value;
@@ -323,91 +452,65 @@
                 const quantity = document.getElementById('quantity').value;
 
                 fetch(`/api/search_media?name=${encodeURIComponent(name)}&author=${encodeURIComponent(author)}&res_len=${encodeURIComponent(quantity)}`)
-                    .then(response => {
-                        if (response.redirected) {
-                            window.location.href = response.url;
-                            return;
-                        }
-
-                        if (response.status === 401) {
-                            showAlert('warning', 'Session expired. Please log in again.');
-                            window.location.href = '/login';
-                            return;
-                        }
-
-                        return response.json();
-                    })
+                    .then(handleFetchResponse)
                     .then(data => {
                         const resultsContainer = document.getElementById('search-results');
                         resultsContainer.innerHTML = ''; // Clear existing results
                         data.forEach(media => {
-                            // Форматируем длительность в минуты:секунды
-                            // nanoseconds / 1e9 = seconds
-                            const duration = Math.floor(media.duration / 1e9);
-                            // Форматируем длительность в минуты:секунды
-
-                            // Получаем минуты, секунды и миллисекунды
-                            const minutes = duration / 60 >> 0;
-                            const seconds = duration % 60;
-                            const formattedDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                            const durationInSeconds = Math.floor(media.duration / 1e9);
+                            const formattedDuration = formatDuration(durationInSeconds);
 
                             const mediaDiv = document.createElement('div');
                             mediaDiv.className = 'list-group-item d-flex justify-content-between align-items-center';
                             mediaDiv.innerHTML = `
-                                <span>${media.name} by ${media.author} (${formattedDuration})</span>
-                                <button class="btn btn-primary btn-sm" onclick="showScheduleForm(${media.id}, '${media.name.replace(/'/g, "\\'")}', ${media.duration})">Schedule</button>
-                            `;
+                            <span>${media.name} by ${media.author} (${formattedDuration})</span>
+                            <button class="btn btn-primary btn-sm" onclick="showScheduleForm(${media.id}, '${media.name.replace(/'/g, "\\'")}', ${media.duration})">Schedule</button>
+                        `;
                             resultsContainer.appendChild(mediaDiv);
                         });
                     })
-                    .catch(error => showAlert('danger', 'Error: Unable to search media.'));
+                    .catch(() => showAlert('danger', 'Error: Unable to search media.'));
             };
-
 
             // Function to show scheduling form
             window.showScheduleForm = (mediaId, mediaName, mediaDuration) => {
-                // Преобразуем длительность из наносекунд в секунды
-                const duration = Math.floor(mediaDuration / 1e9);
-                // Вычисляем минуты и секунды
-                const minutes = duration / 60 >> 0;
-                const seconds = duration % 60;
-                const formattedDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                const durationInSeconds = Math.floor(mediaDuration / 1e9);
+                const formattedDuration = formatDuration(durationInSeconds);
+
                 const existingModal = document.getElementById('scheduleModal');
-                if (existingModal) {
-                    existingModal.remove();
-                }
+                if (existingModal) existingModal.remove();
+
                 const formHtml = `
-                    <div class="modal fade" id="scheduleModal" tabindex="-1" aria-labelledby="scheduleModalLabel" aria-hidden="true">
-                        <div class="modal-dialog">
-                            <div class="modal-content">
-                                <div class="modal-header">
-                                    <h5 class="modal-title" id="scheduleModalLabel">Schedule "${mediaName}" (${formattedDuration})</h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <div class="modal fade" id="scheduleModal" tabindex="-1" aria-labelledby="scheduleModalLabel" aria-hidden="true">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="scheduleModalLabel">Schedule "${mediaName}" (${formattedDuration})</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label for="schedule-time" class="form-label">Start Time:</label>
+                                    <input type="text" class="form-control" id="schedule-time"/>
                                 </div>
-                                <div class="modal-body">
-                                    <div class="mb-3">
-                                        <label for="schedule-time" class="form-label">Start Time:</label>
-                                        <input type="text" class="form-control" id="schedule-time"/>
-                                    </div>
-                                    <div class="d-flex justify-content-between">
-                                        <button type="button" class="btn btn-primary" onclick="scheduleMedia(${mediaId}, ${mediaDuration})">Schedule</button>
-                                        <button type="button" class="btn btn-secondary" onclick="scheduleToEnd(${mediaId})">В конец</button>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="insert-between" class="form-label">Вставить между треками:</label>
-                                        <select id="insert-between" class="form-select">
-                                            <option value="">Выберите промежуток</option>
-                                            <!-- Options will be populated by JavaScript -->
-                                        </select>
-                                    </div>
+                                <div class="d-flex justify-content-between">
+                                    <button type="button" class="btn btn-primary" onclick="scheduleMedia(${mediaId}, ${mediaDuration})">Schedule</button>
+                                    <button type="button" class="btn btn-secondary" onclick="scheduleToEnd(${mediaId})">В конец</button>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="insert-between" class="form-label">Вставить между треками:</label>
+                                    <select id="insert-between" class="form-select">
+                                        <option value="">Выберите промежуток</option>
+                                        <!-- Options will be populated by JavaScript -->
+                                    </select>
                                 </div>
                             </div>
                         </div>
                     </div>
-                `;
+                </div>
+            `;
                 document.body.insertAdjacentHTML('beforeend', formHtml);
-                var myModal = new bootstrap.Modal(document.getElementById('scheduleModal'));
-                myModal.show();
+                new bootstrap.Modal(document.getElementById('scheduleModal')).show();
                 loadAvailableGaps();
 
                 // Initialize Flatpickr for date-time picker
@@ -417,136 +520,8 @@
                     time_24hr: true
                 });
             };
-
-            // Function to schedule media
-            window.scheduleMedia = (mediaId, mediaDuration) => {
-                const startTime = document.getElementById('schedule-time').value;
-                const gapIndex = document.getElementById('insert-between').value;
-
-                if (!startTime && gapIndex === "") {
-                    showAlert('warning', 'Please select a start time or a gap');
-                    return;
-                }
-
-                let payload = {
-                    media_id: mediaId,
-                };
-
-                if (gapIndex !== "") {
-                    // Start time is the start of current gap
-                    payload.start_time = scheduleData[gapIndex].start; 
-                    // Find the gap duration
-                    const gapStart = new Date(scheduleData[gapIndex].start);
-                    const gapEnd = new Date(scheduleData[gapIndex].end);
-
-                    // In milliseconds
-                    const gapDuration = (gapEnd - gapStart)
-
-                    if (Math.ceil(mediaDuration / 1e6) > gapDuration) {
-                        showAlert('warning', 'Media is too long to fit into the selected gap.');
-                        payload.duration = gapDuration * 1e6; // Send the gap duration
-                    } else {
-                        payload.duration = mediaDuration; // Send trimmed duration
-                    }
-                } else {
-                    payload.start_time = startTime;
-                }
-
-                fetch('/api/schedule_track', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                })
-                .then(response => {
-                    if (response.redirected) {
-                        window.location.href = response.url;
-                        return;
-                    }
-
-                    if (response.status === 401) {
-                        showAlert('warning', 'Session expired. Please log in again.');
-                        window.location.href = '/login';
-                        return;
-                    }
-
-                    return response.json();
-                })
-                .then(() => {
-                    loadSchedule(); // Reload schedule to display the new item
-                    showAlert('success', 'Media scheduled successfully.');
-                    const scheduleModal = document.getElementById('scheduleModal');
-                    if (scheduleModal) {
-                        const modalInstance = bootstrap.Modal.getInstance(scheduleModal);
-                        modalInstance.hide(); // Hide the modal
-                    }
-                })
-                .catch(error => showAlert('danger', 'Error: Unable to schedule media.'));
-            };
-
-            // Function to schedule media to the end
-            window.scheduleToEnd = (mediaId) => {
-                if (!lastEndTime) {
-                    showAlert('warning', 'No media in the schedule to determine end time.');
-                    return;
-                }
-
-                const payload = {
-                    media_id: mediaId,
-                    start_time: lastEndTime
-                };
-
-                fetch('/api/schedule_track', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                })
-                .then(response => {
-                    if (response.redirected) {
-                        window.location.href = response.url;
-                        return;
-                    }
-
-                    if (response.status === 401) {
-                        showAlert('warning', 'Session expired. Please log in again.');
-                        window.location.href = '/login';
-                        return;
-                    }
-
-                    return response.json();
-                })
-                .then(() => {
-                    loadSchedule(); // Reload schedule to display the new item
-                    showAlert('success', 'Media scheduled at the end successfully.');
-                    const scheduleModal = document.getElementById('scheduleModal');
-                    if (scheduleModal) {
-                        const modalInstance = bootstrap.Modal.getInstance(scheduleModal);
-                        modalInstance.hide(); // Hide the modal
-                    }
-                })
-                .catch(error => showAlert('danger', 'Error: Unable to schedule media.'));
-            };
-
-            // Function to delete scheduled segment
-            window.deleteSegment = (segmentId) => {
-                fetch(`/delete_segment/${segmentId}`, {
-                    method: 'DELETE'
-                })
-                .then(response => {
-                    if (response.ok) {
-                        loadSchedule(); // Reload schedule after deletion
-                        showAlert('success', 'Segment deleted successfully.');
-                    } else {
-                        showAlert('danger', 'Error: Unable to delete segment.');
-                    }
-                })
-                .catch(error => showAlert('danger', 'Error: Unable to delete segment.'));
-            };
-
-
-            loadSchedule();
-
         });
-
     </script>
 </body>
+
 </html>
