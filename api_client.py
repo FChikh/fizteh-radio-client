@@ -192,7 +192,7 @@ class client:
         if author:
             params['author'] = author
         if tags:
-            params['tags'] = tags  # Ensure tags are serialized appropriately
+            params['tags'] = ','.join([tag.name for tag in tags])  # Ensure tags are serialized appropriately
 
         try:
             response = requests.get(
@@ -273,7 +273,7 @@ class client:
                     raise ValidationError(error_msg) from http_err
             elif response.status_code >= 500:
                 raise ServerError(
-                    "Server error while uploading media.") from http_err
+                    f"Server error while uploading media. 500") from http_err
             else:
                 raise APIClientError(
                     f"HTTP error occurred: {http_err}") from http_err

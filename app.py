@@ -382,7 +382,7 @@ def api_search_media():
 
     name = request.args.get('name')
     author = request.args.get('author')
-    tags = request.args.getlist('tags')
+    tags = request.args.get('tags').split(',') if request.args.get('tags') else []
     res_len = request.args.get('res_len', 5)
 
     try:
@@ -390,7 +390,7 @@ def api_search_media():
         tags = list(map(int, tags)) if tags else []
         # Retrieve Tag objects
         tags_data = [g.api_client.get_tag_by_id(
-            tag_id).to_dict() for tag_id in tags]
+            tag_id) for tag_id in tags]
     except ValueError:
         return jsonify({'error': 'Invalid tag IDs.'}), 400
     except NotFoundError:
